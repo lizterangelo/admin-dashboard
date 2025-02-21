@@ -1,6 +1,6 @@
 import React, { useRef, useCallback, useContext } from "react";
 import { Link, withRouter, Redirect } from "react-router-dom";
-import { authh } from "../config/firebase/firebase-app";
+import { auth } from "../config/firebase/firebase-app";
 import { UserContext } from "../provider/UserProvider";
 
 function Login({ history }) {
@@ -12,7 +12,7 @@ function Login({ history }) {
       buttonRef.current.textContent = "Loading...";
       const { email, password } = event.target.elements;
       try {
-        await authh
+        await auth
           .signInWithEmailAndPassword(email.value, password.value)
           .then(() => (buttonRef.current.textContent = "Login"));
         history.push("/dashboard");

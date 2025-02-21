@@ -1,6 +1,7 @@
 import firebase from "firebase/app";
 import "firebase/database";
 import "firebase/auth";
+import "firebase/firestore"; // <-- Import Firestore
 
 // Firebase configuration
 const firebaseConfig = {
@@ -13,12 +14,18 @@ const firebaseConfig = {
   messagingSenderId: `${process.env.REACT_APP_MESSAGING_SENDER_ID}`,
   appId: `${process.env.REACT_APP_APP_ID}`,
 };
+
 // Initialize Firebase
 firebase.initializeApp(firebaseConfig);
-// Realtime Darabase
-const db = firebase.database();
-const stokBarangRef = db.ref("stokBarang");
 
-// auth
-const authh = firebase.auth();
-export { stokBarangRef, authh, db };
+// Realtime Database
+const realtimeDatabase = firebase.database();
+const stockItemsRef = realtimeDatabase.ref("stokBarang");
+
+// Auth
+const auth = firebase.auth();
+
+// Firestore
+const firestore = firebase.firestore();
+
+export { stockItemsRef, auth, realtimeDatabase, firestore };
