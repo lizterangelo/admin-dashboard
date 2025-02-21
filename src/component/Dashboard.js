@@ -15,6 +15,11 @@ function Dashboard() {
   const [numToGenerate, setNumToGenerate] = useState(1);
   const [isGenerating, setIsGenerating] = useState(false);
 
+  // Modal state for delete all codes
+  const [isDeleteAllModalOpen, setIsDeleteAllModalOpen] = useState(false);
+  const [deleteConfirmationText, setDeleteConfirmationText] = useState("");
+  const [isDeleting, setIsDeleting] = useState(false);
+
   // Fetch redeem codes from Firestore on mount
   useEffect(() => {
     firestore
@@ -35,6 +40,59 @@ function Dashboard() {
         alert(error);
       });
   }, []);
+
+  // Toggle 'isUsed' status
+  const toggleIsUsed = async (codeId, currentStatus) => {
+    try {
+      await firestore.collection("redeemCodes").doc(codeId).update({
+        isUsed: !currentStatus,
+      });
+      setCodes((prevCodes) =>
+        prevCodes.map((code) =>
+          code.id === codeId
+            ? { ...code, isUsed: !currentStatus }
+            : code
+        )
+      );
+    } catch (error) {
+      alert("Error updating code status: " + error.message);
+    }
+  };
+
+  // Delete a redeem code
+  const deleteRedeemCode = async (codeId) => {
+    try {
+      await firestore.collection("redeemCodes").doc(codeId).delete();
+      setCodes((prevCodes) => prevCodes.filter((code) => code.id !== codeId));
+    } catch (error) {
+      alert("Error deleting code: " + error.message);
+    }
+  };
+
+  // Delete all redeem codes
+  const handleDeleteAllConfirm = async () => {
+    if (isDeleting) return; // Prevent multiple clicks
+    if (deleteConfirmationText !== "CONFIRM") {
+      alert("Please type 'CONFIRM' to proceed.");
+      return;
+    }
+    setIsDeleting(true);
+    try {
+      const batch = firestore.batch();
+      codes.forEach((code) => {
+        const codeRef = firestore.collection("redeemCodes").doc(code.id);
+        batch.delete(codeRef);
+      });
+      await batch.commit();
+      setCodes([]);
+      alert("All codes deleted successfully.");
+      setIsDeleteAllModalOpen(false);
+    } catch (error) {
+      alert("Error deleting all codes: " + error.message);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   // Generate redeem codes based on user input
   const handleGenerateConfirm = async () => {
@@ -71,12 +129,20 @@ function Dashboard() {
               <span className="font-medium text-gray-900">User: </span>
               {currentUser.email} {currentUser.name}
             </h2>
-            <button
-              onClick={() => auth.signOut()}
-              className="bg-red-200 hover:bg-red-300 font-bold py-1 px-2 text-red-600 rounded"
-            >
-              Logout
-            </button>
+            <div>
+              <button
+                onClick={() => auth.signOut()}
+                className="bg-red-200 hover:bg-red-300 font-bold py-1 px-2 text-red-600 rounded"
+              >
+                Logout
+              </button>
+              <button
+                onClick={() => setIsDeleteAllModalOpen(true)}
+                className="ml-4 bg-red-500 hover:bg-red-600 text-white font-bold py-1 px-2 rounded"
+              >
+                Delete All Codes
+              </button>
+            </div>
           </div>
           <div className="shadow overflow-hidden border-b border-gray-200 sm:rounded-lg">
             <table
@@ -94,6 +160,9 @@ function Dashboard() {
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Used
                   </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Actions
+                  </th>
                 </tr>
               </thead>
               {codesLoaded ? (
@@ -108,6 +177,20 @@ function Dashboard() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         {code.isUsed.toString()}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                        <button
+                          onClick={() => toggleIsUsed(code.id, code.isUsed)}
+                          className="text-blue-600 hover:text-blue-900 mr-4"
+                        >
+                          {code.isUsed ? "Mark as Unused" : "Mark as Used"}
+                        </button>
+                        <button
+                          onClick={() => deleteRedeemCode(code.id)}
+                          className="text-red-600 hover:text-red-900"
+                        >
+                          Delete
+                        </button>
                       </td>
                     </tr>
                   ))}
@@ -203,6 +286,83 @@ function Dashboard() {
                     }`}
                   >
                     {isGenerating ? "Generating..." : "Generate"}
+                  </button>
+                </div>
+              </div>
+            </Transition.Child>
+          </div>
+        </Dialog>
+      </Transition>
+
+      {/* Modal for deleting all codes */}
+      <Transition appear show={isDeleteAllModalOpen} as={Fragment}>
+        <Dialog
+          as="div"
+          className="fixed inset-0 z-10 overflow-y-auto"
+          onClose={() => setIsDeleteAllModalOpen(false)}
+        >
+          <div className="min-h-screen px-4 text-center">
+            <Transition.Child
+              as={Fragment}
+              enter="ease-out duration-300"
+              enterFrom="opacity-0"
+              enterTo="opacity-100"
+              leave="ease-in duration-200"
+              leaveFrom="opacity-100"
+              leaveTo="opacity-0"
+            >
+              <Dialog.Overlay className="fixed inset-0 bg-black opacity-30" />
+            </Transition.Child>
+            <span
+              className="inline-block h-screen align-middle"
+              aria-hidden="true"
+            >
+              &#8203;
+            </span>
+            <Transition.Child
+              as={Fragment}
+              enter="ease-out duration-300"
+              enterFrom="opacity-0 scale-95"
+              enterTo="opacity-100 scale-100"
+              leave="ease-in duration-200"
+              leaveFrom="opacity-100 scale-100"
+              leaveTo="opacity-0 scale-95"
+            >
+              <div className="inline-block w-full max-w-md p-6 my-8 overflow-hidden text-left align-middle transition-all transform bg-white shadow-xl rounded">
+                <Dialog.Title
+                  as="h3"
+                  className="text-lg font-medium leading-6 text-gray-900"
+                >
+                  Delete All Redeem Codes
+                </Dialog.Title>
+                <div className="mt-2">
+                  <input
+                    type="text"
+                    value={deleteConfirmationText}
+                    onChange={(e) =>
+                      setDeleteConfirmationText(e.target.value)
+                    }
+                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"
+                  />
+                  <p className="text-sm text-gray-500 mt-2">
+                    Type <strong>CONFIRM</strong> to proceed with deleting all codes.
+                  </p>
+                </div>
+                <div className="mt-4 flex justify-end">
+                  <button
+                    onClick={() => setIsDeleteAllModalOpen(false)}
+                    className="mr-2 px-4 py-2 bg-gray-300 rounded hover:bg-gray-400"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleDeleteAllConfirm}
+                    disabled={isDeleting}
+                    className={`px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 ${
+                      isDeleting ? "opacity-50 cursor-not-allowed" : ""
+                    }`}
+                  >
+                    {isDeleting ? "Deleting..." : "Delete All"}
                   </button>
                 </div>
               </div>
