@@ -20,17 +20,24 @@ function Dashboard() {
   const [deleteConfirmationText, setDeleteConfirmationText] = useState("");
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // Fetch redeem codes from Firestore on mount
-  useEffect(() => {
+  // Sorting state
+  const [sortColumn, setSortColumn] = useState(null); // "code", "date", or "used"
+  const [sortDirection, setSortDirection] = useState("desc"); // "desc" or "asc"
+
+  // Function to fetch redeem codes from Firestore (including the createdAt field)
+  const refreshRedeemCodes = () => {
     firestore
       .collection("redeemCodes")
+      .orderBy("createdAt", "desc") // initially sorted by newest
       .get()
       .then((snapshot) => {
         const fetchedCodes = [];
         snapshot.forEach((doc) => {
+          const data = doc.data();
           fetchedCodes.push({
             id: doc.id,
-            isUsed: doc.data().isUsed,
+            isUsed: data.isUsed,
+            createdAt: data.createdAt ? data.createdAt.toDate() : null,
           });
         });
         setCodes(fetchedCodes);
@@ -39,6 +46,11 @@ function Dashboard() {
       .catch((error) => {
         alert(error);
       });
+  };
+
+  // Fetch redeem codes from Firestore on mount
+  useEffect(() => {
+    refreshRedeemCodes();
   }, []);
 
   // Toggle 'isUsed' status
@@ -49,9 +61,7 @@ function Dashboard() {
       });
       setCodes((prevCodes) =>
         prevCodes.map((code) =>
-          code.id === codeId
-            ? { ...code, isUsed: !currentStatus }
-            : code
+          code.id === codeId ? { ...code, isUsed: !currentStatus } : code
         )
       );
     } catch (error) {
@@ -103,8 +113,9 @@ function Dashboard() {
       for (let i = 0; i < numToGenerate; i++) {
         const docRef = await firestore.collection("redeemCodes").add({
           isUsed: false,
+          createdAt: new Date(), // Added timestamp
         });
-        newCodes.push({ id: docRef.id, isUsed: false });
+        newCodes.push({ id: docRef.id, isUsed: false, createdAt: new Date() });
       }
       alert(`${numToGenerate} codes generated successfully.`);
       setCodes((prevCodes) => [...prevCodes, ...newCodes]);
@@ -116,6 +127,41 @@ function Dashboard() {
       setIsGenerating(false);
     }
   };
+
+  // Handle sorting by toggling sort direction or setting a new column to sort by
+  const handleSort = (column) => {
+    if (sortColumn === column) {
+      setSortDirection(sortDirection === "desc" ? "asc" : "desc");
+    } else {
+      setSortColumn(column);
+      setSortDirection("desc"); // default to descending when switching columns
+    }
+  };
+
+  // Create a sorted copy of codes based on the current sortColumn and sortDirection
+  const sortedCodes = [...codes].sort((a, b) => {
+    if (sortColumn === "date") {
+      // Both dates must exist to compare; default to 0 otherwise
+      if (a.createdAt && b.createdAt) {
+        return sortDirection === "asc"
+          ? a.createdAt - b.createdAt
+          : b.createdAt - a.createdAt;
+      }
+      return 0;
+    }
+    if (sortColumn === "code") {
+      return sortDirection === "asc"
+        ? a.id.localeCompare(b.id)
+        : b.id.localeCompare(a.id);
+    }
+    if (sortColumn === "used") {
+      // Convert booleans to numbers (false=0, true=1)
+      return sortDirection === "asc"
+        ? Number(a.isUsed) - Number(b.isUsed)
+        : Number(b.isUsed) - Number(a.isUsed);
+    }
+    return 0; // if no sort column is selected, keep original order
+  });
 
   return (
     <div className="flex justify-center">
@@ -137,6 +183,12 @@ function Dashboard() {
                 Logout
               </button>
               <button
+                onClick={refreshRedeemCodes}
+                className="ml-4 bg-blue-500 hover:bg-blue-600 text-white font-bold py-1 px-2 rounded"
+              >
+                Refresh Redeem Codes
+              </button>
+              <button
                 onClick={() => setIsDeleteAllModalOpen(true)}
                 className="ml-4 bg-red-500 hover:bg-red-600 text-white font-bold py-1 px-2 rounded"
               >
@@ -155,10 +207,43 @@ function Dashboard() {
                     No
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Redeem Code
+                    Redeem Code{" "}
+                    <button
+                      onClick={() => handleSort("code")}
+                      className="text-sm ml-1 text-blue-600 hover:text-blue-900"
+                    >
+                      {sortColumn === "code"
+                        ? sortDirection === "desc"
+                          ? "↓"
+                          : "↑"
+                        : "↕"}
+                    </button>
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Used
+                    Date Added{" "}
+                    <button
+                      onClick={() => handleSort("date")}
+                      className="text-sm ml-1 text-blue-600 hover:text-blue-900"
+                    >
+                      {sortColumn === "date"
+                        ? sortDirection === "desc"
+                          ? "↓"
+                          : "↑"
+                        : "↕"}
+                    </button>
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Used{" "}
+                    <button
+                      onClick={() => handleSort("used")}
+                      className="text-sm ml-1 text-blue-600 hover:text-blue-900"
+                    >
+                      {sortColumn === "used"
+                        ? sortDirection === "desc"
+                          ? "↓"
+                          : "↑"
+                        : "↕"}
+                    </button>
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Actions
@@ -167,13 +252,24 @@ function Dashboard() {
               </thead>
               {codesLoaded ? (
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {codes.map((code, index) => (
+                  {sortedCodes.map((code, index) => (
                     <tr key={code.id}>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {index + 1}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {code.id}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {code.createdAt
+                          ? code.createdAt.toLocaleString("en-US", {
+                              month: "short",
+                              day: "numeric",
+                              year: "numeric",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })
+                          : "N/A"}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         {code.isUsed.toString()}
